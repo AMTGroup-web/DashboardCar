@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+<html lang="th">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Car Booking Dashboard</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Fonts -->
+    <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Bai+Jamjuree:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
+
+    <!-- Vue 3 -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-app.js";
+        import { getDatabase, ref, onValue, get } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-database.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyDKnLLu2TxskF1oVoJOYwrd4MtXW26VsBc",
+            authDomain: "carbbooking.firebaseapp.com",
+            databaseURL: "https://carbbooking-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "carbbooking",
+            storageBucket: "carbbooking.firebasestorage.app",
+            messagingSenderId: "889535468734",
+            appId: "1:889535468734:web:df5f7fd479283d927b7aef",
+            measurementId: "G-R6CESPWH25"
+  };
+
+        const firebaseApp = initializeApp(firebaseConfig);
+        const database = getDatabase(firebaseApp);
+
+        // Expose to global scope
+        window.firebaseDB = database;
+        window.firebaseRef = ref;
+        window.firebaseOnValue = onValue;
+        window.firebaseGet = get;
+    </script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['"Bai Jamjuree"', 'sans-serif'],
+                        heading: ['"Outfit"', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#f0f9ff',
+                            100: '#e0f2fe',
+                            500: '#0ea5e9',
+                            600: '#0284c7',
+                            900: '#0c4a6e',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            min-height: 100vh;
+        }
+
+        .glass-card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .calendar-cell {
+            min-height: 100px;
+        }
+
+        .booking-badge {
+            font-size: 10px;
+            padding: 3px 6px;
+            border-radius: 4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 100%;
+            display: block;
+        }
+
+        @keyframes pulse-slow {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.7;
+            }
+        }
+
+        .animate-pulse-slow {
+            animation: pulse-slow 2s ease-in-out infinite;
+        }
+    </style>
+</head>
+
+<body class="text-white antialiased">
+    <div id="app" class="min-h-screen">
+        <!-- Header -->
+        <header class="bg-slate-900/50 backdrop-blur-xl border-b border-slate-700/50 sticky top-0 z-50">
+            <div class="max-w-7xl mx-auto px-6 py-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h1 class="font-heading text-2xl font-bold text-white flex items-center gap-3">
+                            <i class="fa-solid fa-car-side text-brand-500"></i>
+                            Car Booking Dashboard
+                        </h1>
+                        <p class="text-xs text-slate-400 mt-1">ระบบจัดการการจองรถบริษัท</p>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <div class="text-right">
+                            <p class="text-xs text-slate-400">Last Updated</p>
+                            <p class="text-sm font-mono text-white">{{ lastUpdated }}</p>
+                        </div>
+                        <button @click="refreshData"
+                            class="bg-brand-500 hover:bg-brand-600 text-white px-4 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2">
+                            <i :class="['fa-solid fa-rotate-right', loading ? 'fa-spin' : '']"></i>
+                            Refresh
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="max-w-7xl mx-auto px-6 py-8 space-y-8">
+            <!-- Stats Cards -->
+            <section class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="stat-card rounded-2xl p-5">
+                    <div class="flex items-center gap-3">
+                        <div class="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center">
+                            <i class="fa-solid fa-calendar-check text-blue-400 text-xl"></i>
+                        </div>
+                        <div>
+                            <p class="text-2xl font-bold font-heading">{{ stats.totalBookings }}</p>
+                            <p class="text-xs text-slate-400">Total Bookings</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="stat-card rounded-2xl p-5">
+                    <div class="flex items-center gap-3">
+                        <div class="w-12 h-12 rounded-xl bg-green-500/20 flex items-center justify-center">
+                            <i class="fa-solid fa-circle-check text-green-400 text-xl"></i>
+                        </div>
+                        <div>
+                            <p class="text-2xl font-bold font-heading">{{ stats.approved }}</p>
+                            <p class="text-xs text-slate-400">Approved</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="stat-card rounded-2xl p-5">
+                    <div class="flex items-center gap-3">
+                        <div class="w-12 h-12 rounded-xl bg-amber-500/20 flex items-center justify-center">
+                            <i class="fa-solid fa-rotate-left text-amber-400 text-xl"></i>
+                        </div>
+                        <div>
+                            <p class="text-2xl font-bold font-heading">{{ stats.returned }}</p>
+                            <p class="text-xs text-slate-400">Returned</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="stat-card rounded-2xl p-5">
+                    <div class="flex items-center gap-3">
+                        <div class="w-12 h-12 rounded-xl bg-purple-500/20 flex items-center justify-center">
+                            <i class="fa-solid fa-road text-purple-400 text-xl"></i>
+                        </div>
+                        <div>
+                            <p class="text-2xl font-bold font-heading">{{ stats.totalDistance.toLocaleString() }}</p>
+                            <p class="text-xs text-slate-400">Total km</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Month Selector & Calendar -->
+            <section class="glass-card rounded-3xl p-6">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                    <h2 class="font-heading text-xl font-bold flex items-center gap-2">
+                        <i class="fa-regular fa-calendar text-brand-500"></i>
+                        Booking Calendar
+                    </h2>
+
+                    <!-- Month Navigation -->
+                    <div class="flex items-center gap-3">
+                        <button @click="prevMonth"
+                            class="w-10 h-10 rounded-xl bg-slate-700/50 hover:bg-slate-600/50 flex items-center justify-center transition-colors">
+                            <i class="fa-solid fa-chevron-left"></i>
+                        </button>
+                        <div class="bg-slate-800/50 rounded-xl px-6 py-2 min-w-[200px] text-center">
+                            <span class="font-heading font-bold text-lg">{{ currentMonthName }} {{ currentYear }}</span>
+                        </div>
+                        <button @click="nextMonth"
+                            class="w-10 h-10 rounded-xl bg-slate-700/50 hover:bg-slate-600/50 flex items-center justify-center transition-colors">
+                            <i class="fa-solid fa-chevron-right"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Calendar Grid -->
+                <div class="overflow-x-auto">
+                    <!-- Day Headers -->
+                    <div class="grid grid-cols-7 gap-1 mb-2">
+                        <div v-for="day in ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส']" :key="day"
+                            class="text-center text-xs font-bold text-slate-400 py-2">
+                            {{ day }}
+                        </div>
+                    </div>
+
+                    <!-- Calendar Cells -->
+                    <div class="grid grid-cols-7 gap-1">
+                        <div v-for="(cell, index) in calendarDays" :key="index" :class="[
+                            'calendar-cell rounded-xl p-2 transition-all',
+                            cell.isCurrentMonth ? 'bg-slate-800/30' : 'bg-slate-900/30 opacity-50',
+                            cell.isToday ? 'ring-2 ring-brand-500' : '',
+                            cell.bookings.length > 0 ? 'hover:bg-slate-700/50 cursor-pointer' : ''
+                        ]" @click="cell.bookings.length > 0 && showDayDetail(cell)">
+                            <div class="flex justify-between items-start mb-1">
+                                <span
+                                    :class="['text-sm font-bold', cell.isToday ? 'text-brand-400' : 'text-slate-300']">
+                                    {{ cell.day }}
+                                </span>
+                                <span v-if="cell.bookings.length > 0"
+                                    class="text-[10px] bg-brand-500/20 text-brand-300 px-1.5 rounded">
+                                    {{ cell.bookings.length }}
+                                </span>
+                            </div>
+                            <div class="space-y-1">
+                                <div v-for="(booking, bi) in cell.bookings.slice(0, 2)" :key="bi" :class="[
+                                    'booking-badge',
+                                    booking.status === 'Approved' ? 'bg-green-500/20 text-green-300' :
+                                    booking.status === 'Returned' ? 'bg-amber-500/20 text-amber-300' :
+                                    'bg-yellow-500/20 text-yellow-300'
+                                ]"
+                                    :title="`${booking.userName || booking.user} - ${booking.carModel} (${booking.carPlate})`">
+                                    <i :class="booking.carType === 'EV' ? 'fa-solid fa-bolt' : 'fa-solid fa-car'"
+                                        class="mr-1"></i>
+                                    {{ (booking.userName || booking.user || '?').split(' ')[0] }} - {{ booking.carModel
+                                    }}
+                                </div>
+                                <div v-if="cell.bookings.length > 2" class="text-[9px] text-slate-400 text-center">
+                                    +{{ cell.bookings.length - 2 }} more
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Bookings Table -->
+            <section class="glass-card rounded-3xl p-6">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                    <h2 class="font-heading text-xl font-bold flex items-center gap-2">
+                        <i class="fa-solid fa-list text-brand-500"></i>
+                        Monthly Bookings ({{ currentMonthName }} {{ currentYear }})
+                    </h2>
+
+                    <!-- Filter -->
+                    <div class="flex items-center gap-2">
+                        <select v-model="statusFilter"
+                            class="bg-slate-800 border border-slate-600 rounded-xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-500">
+                            <option value="all">All Status</option>
+                            <option value="Approved">Approved</option>
+                            <option value="Pending">Pending</option>
+                            <option value="Returned">Returned</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Table -->
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead>
+                            <tr class="border-b border-slate-700">
+                                <th
+                                    class="text-left text-xs font-bold text-slate-400 uppercase tracking-wider py-3 px-4">
+                                    ผู้จอง</th>
+                                <th
+                                    class="text-left text-xs font-bold text-slate-400 uppercase tracking-wider py-3 px-4">
+                                    รถ</th>
+                                <th
+                                    class="text-left text-xs font-bold text-slate-400 uppercase tracking-wider py-3 px-4">
+                                    วันที่</th>
+                                <th
+                                    class="text-left text-xs font-bold text-slate-400 uppercase tracking-wider py-3 px-4">
+                                    สถานะ</th>
+                                <th
+                                    class="text-left text-xs font-bold text-slate-400 uppercase tracking-wider py-3 px-4">
+                                    ประเภท</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="booking in filteredBookings" :key="booking.bookingId"
+                                class="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors">
+                                <td class="py-4 px-4">
+                                    <div class="flex items-center gap-3">
+                                        <div
+                                            class="w-8 h-8 rounded-full bg-gradient-to-br from-brand-500 to-purple-500 flex items-center justify-center text-xs font-bold">
+                                            {{ (booking.userName || booking.user || 'U')[0].toUpperCase() }}
+                                        </div>
+                                        <span class="font-medium">{{ booking.userName || booking.user || '-' }}</span>
+                                    </div>
+                                </td>
+                                <td class="py-4 px-4">
+                                    <div>
+                                        <p class="font-bold text-sm">{{ booking.carModel || '-' }}</p>
+                                        <p class="text-xs text-slate-400 font-mono">{{ booking.carPlate || '-' }}</p>
+                                    </div>
+                                </td>
+                                <td class="py-4 px-4">
+                                    <p class="text-sm">{{ formatDate(booking.startDate || booking.start) }}</p>
+                                    <p class="text-xs text-slate-400">→ {{ formatDate(booking.endDate || booking.end) }}
+                                    </p>
+                                </td>
+                                <td class="py-4 px-4">
+                                    <span :class="[
+                                        'px-3 py-1 rounded-full text-xs font-bold',
+                                        booking.status === 'Approved' ? 'bg-green-500/20 text-green-400' :
+                                        booking.status === 'Returned' ? 'bg-amber-500/20 text-amber-400' :
+                                        booking.status === 'Pending' ? 'bg-yellow-500/20 text-yellow-400' :
+                                        'bg-slate-500/20 text-slate-400'
+                                    ]">
+                                        {{ booking.status || 'Unknown' }}
+                                    </span>
+                                </td>
+                                <td class="py-4 px-4">
+                                    <span :class="[
+                                        'px-2 py-1 rounded text-[10px] font-bold uppercase',
+                                        booking.usageType === 'Work' ? 'bg-blue-500/20 text-blue-400' : 'bg-purple-500/20 text-purple-400'
+                                    ]">
+                                        {{ booking.usageType === 'Work' ? 'งาน' : 'ส่วนตัว' }}
+                                    </span>
+                                </td>
+                            </tr>
+                            <tr v-if="filteredBookings.length === 0">
+                                <td colspan="5" class="text-center py-10 text-slate-500">
+                                    <i class="fa-regular fa-calendar-xmark text-4xl mb-3 block"></i>
+                                    ไม่มีข้อมูลการจองในเดือนนี้
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Returns Summary -->
+            <section class="glass-card rounded-3xl p-6">
+                <h2 class="font-heading text-xl font-bold flex items-center gap-2 mb-6">
+                    <i class="fa-solid fa-rotate-left text-amber-500"></i>
+                    Return Summary ({{ currentMonthName }})
+                </h2>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div v-for="ret in monthlyReturns" :key="ret.bookingId" @click="showReturnDetail(ret)"
+                        class="bg-slate-800/30 rounded-2xl p-4 border border-slate-700/50 cursor-pointer hover:bg-slate-700/30 hover:border-slate-600 transition-all">
+                        <div class="flex items-start justify-between mb-3">
+                            <div>
+                                <p class="font-bold">{{ ret.requester }}</p>
+                                <p class="text-xs text-slate-400">{{ ret.carPlate }} - {{ ret.carModel }}</p>
+                            </div>
+                            <span class="bg-amber-500/20 text-amber-400 text-[10px] font-bold px-2 py-1 rounded">
+                                Returned
+                            </span>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2 text-xs">
+                            <div class="bg-slate-700/30 rounded-lg p-2">
+                                <p class="text-slate-400">Distance</p>
+                                <p class="font-bold text-lg">{{ ret.distance || 0 }} km</p>
+                            </div>
+                            <div class="bg-slate-700/30 rounded-lg p-2">
+                                <p class="text-slate-400">Reimburse</p>
+                                <p class="font-bold text-lg text-green-400">฿{{ (ret.reimburse || 0).toLocaleString() }}
+                                </p>
+                            </div>
+                        </div>
+                        <div class="mt-3 text-center">
+                            <span class="text-[10px] text-brand-400 hover:text-brand-300">
+                                <i class="fa-solid fa-eye mr-1"></i>คลิกดูรายละเอียด
+                            </span>
+                        </div>
+                    </div>
+                    <div v-if="monthlyReturns.length === 0" class="col-span-full text-center py-10 text-slate-500">
+                        <i class="fa-regular fa-folder-open text-4xl mb-3 block"></i>
+                        ไม่มีข้อมูลการคืนรถในเดือนนี้
+                    </div>
+                </div>
+            </section>
+
+            <!-- Car Availability Status -->
+            <section class="glass-card rounded-3xl p-6">
+                <h2 class="font-heading text-xl font-bold flex items-center gap-2 mb-6">
+                    <i class="fa-solid fa-car text-emerald-500"></i>
+                    Car Availability (วันนี้)
+                </h2>
+
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div v-for="car in carsWithAvailability" :key="car.id" :class="[
+                            'rounded-2xl p-4 border transition-all',
+                            car.isAvailable 
+                                ? 'bg-emerald-500/10 border-emerald-500/30' 
+                                : 'bg-red-500/10 border-red-500/30'
+                        ]">
+                        <div class="flex items-center gap-3 mb-2">
+                            <div :class="[
+                                'w-10 h-10 rounded-xl flex items-center justify-center text-lg',
+                                car.type === 'EV' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-700/50 text-slate-400'
+                            ]">
+                                <i :class="car.type === 'EV' ? 'fa-solid fa-bolt' : 'fa-solid fa-gas-pump'"></i>
+                            </div>
+                            <div>
+                                <p class="font-bold text-sm">{{ car.model }}</p>
+                                <p class="text-[10px] text-slate-400 font-mono">{{ car.plate }}</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span :class="[
+                                'text-[10px] font-bold px-2 py-1 rounded-full',
+                                car.isAvailable 
+                                    ? 'bg-emerald-500/20 text-emerald-400' 
+                                    : 'bg-red-500/20 text-red-400'
+                            ]">
+                                <i :class="car.isAvailable ? 'fa-solid fa-check mr-1' : 'fa-solid fa-xmark mr-1'"></i>
+                                {{ car.isAvailable ? 'ว่าง' : 'ไม่ว่าง' }}
+                            </span>
+                            <div v-if="!car.isAvailable && car.bookedBy" class="text-right">
+                                <p class="text-[9px] text-slate-400">{{ car.bookedBy }}</p>
+                                <p v-if="car.bookedUntil" class="text-[9px] text-amber-400">
+                                    ถึง {{ formatDate(car.bookedUntil) }}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Summary -->
+                <div class="mt-6 flex items-center justify-center gap-6 text-sm">
+                    <div class="flex items-center gap-2">
+                        <span class="w-3 h-3 rounded-full bg-emerald-500"></span>
+                        <span class="text-slate-400">ว่าง: <strong class="text-emerald-400">{{ availableCarsCount
+                                }}</strong> คัน</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="w-3 h-3 rounded-full bg-red-500"></span>
+                        <span class="text-slate-400">ไม่ว่าง: <strong class="text-red-400">{{ bookedCarsCount
+                                }}</strong> คัน</span>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Day Detail Modal -->
+        <div v-if="selectedDay"
+            class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm p-6"
+            @click.self="selectedDay = null">
+            <div class="bg-slate-800 rounded-3xl shadow-2xl p-6 w-full max-w-md border border-slate-700">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="font-heading font-bold text-lg">
+                        {{ selectedDay.day }} {{ currentMonthName }} {{ currentYear }}
+                    </h3>
+                    <button @click="selectedDay = null"
+                        class="w-8 h-8 rounded-full bg-slate-700 hover:bg-slate-600 flex items-center justify-center">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+                <div class="space-y-3 max-h-[400px] overflow-y-auto">
+                    <div v-for="booking in selectedDay.bookings" :key="booking.bookingId"
+                        class="bg-slate-700/50 rounded-xl p-4">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="font-bold">{{ booking.userName || booking.user }}</span>
+                            <span :class="[
+                                'px-2 py-0.5 rounded text-[10px] font-bold',
+                                booking.status === 'Approved' ? 'bg-green-500/20 text-green-400' :
+                                booking.status === 'Returned' ? 'bg-amber-500/20 text-amber-400' :
+                                'bg-yellow-500/20 text-yellow-400'
+                            ]">{{ booking.status }}</span>
+                        </div>
+                        <p class="text-sm text-slate-300">{{ booking.carModel }} - {{ booking.carPlate }}</p>
+                        <p class="text-xs text-slate-400 mt-1">
+                            {{ formatDate(booking.startDate || booking.start) }} → {{ formatDate(booking.endDate ||
+                            booking.end) }}
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Return Detail Modal -->
+        <div v-if="selectedReturn"
+            class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm p-6"
+            @click.self="selectedReturn = null">
+            <div class="bg-slate-800 rounded-3xl shadow-2xl p-6 w-full max-w-lg border border-slate-700">
+                <div class="flex items-center justify-between mb-6">
+                    <h3 class="font-heading font-bold text-xl flex items-center gap-2">
+                        <i class="fa-solid fa-rotate-left text-amber-500"></i>
+                        Return Details
+                    </h3>
+                    <button @click="selectedReturn = null"
+                        class="w-8 h-8 rounded-full bg-slate-700 hover:bg-slate-600 flex items-center justify-center">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+
+                <!-- Car & User Info -->
+                <div class="bg-slate-700/30 rounded-xl p-4 mb-4">
+                    <div class="flex items-center justify-between mb-2">
+                        <div>
+                            <p class="font-bold text-lg">{{ selectedReturn.requester }}</p>
+                            <p class="text-sm text-slate-400">{{ selectedReturn.carModel }} - {{ selectedReturn.carPlate
+                                }}</p>
+                        </div>
+                        <span class="bg-amber-500/20 text-amber-400 text-xs font-bold px-3 py-1 rounded-full">
+                            Returned
+                        </span>
+                    </div>
+                    <p class="text-xs text-slate-500">{{ formatDateTime(selectedReturn.returnedAt) }}</p>
+                </div>
+
+                <!-- Stats Grid -->
+                <div class="grid grid-cols-2 gap-3 mb-4">
+                    <div class="bg-slate-700/30 rounded-xl p-3 text-center">
+                        <p class="text-slate-400 text-xs">Odo Before</p>
+                        <p class="font-bold text-xl">{{ selectedReturn.odoBefore || '-' }} <span
+                                class="text-xs text-slate-400">km</span></p>
+                    </div>
+                    <div class="bg-slate-700/30 rounded-xl p-3 text-center">
+                        <p class="text-slate-400 text-xs">Odo After</p>
+                        <p class="font-bold text-xl">{{ selectedReturn.odoAfter || '-' }} <span
+                                class="text-xs text-slate-400">km</span></p>
+                    </div>
+                    <div class="bg-purple-500/10 rounded-xl p-3 text-center">
+                        <p class="text-slate-400 text-xs">Distance</p>
+                        <p class="font-bold text-xl text-purple-400">{{ selectedReturn.distance || 0 }} <span
+                                class="text-xs">km</span></p>
+                    </div>
+                    <div class="bg-green-500/10 rounded-xl p-3 text-center">
+                        <p class="text-slate-400 text-xs">Reimburse</p>
+                        <p class="font-bold text-xl text-green-400">฿{{ (selectedReturn.reimburse || 0).toLocaleString()
+                            }}</p>
+                    </div>
+                </div>
+
+                <!-- Additional Info -->
+                <div class="bg-slate-700/30 rounded-xl p-3 mb-4">
+                    <div class="grid grid-cols-3 gap-2 text-center text-xs">
+                        <div>
+                            <p class="text-slate-400">Fuel Rate</p>
+                            <p class="font-bold">{{ selectedReturn.fuelRate || '-' }} ฿/km</p>
+                        </div>
+                        <div>
+                            <p class="text-slate-400">Battery Before</p>
+                            <p class="font-bold">{{ selectedReturn.batteryBefore || '-' }}%</p>
+                        </div>
+                        <div>
+                            <p class="text-slate-400">Battery After</p>
+                            <p class="font-bold">{{ selectedReturn.batteryAfter || '-' }}%</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Photos -->
+                <div class="mb-4">
+                    <p class="text-sm font-bold text-slate-300 mb-2">
+                        <i class="fa-solid fa-images mr-2"></i>Photos
+                    </p>
+                    <div class="grid grid-cols-2 gap-3">
+                        <a v-if="selectedReturn.photoBeforeUrl" :href="selectedReturn.photoBeforeUrl" target="_blank"
+                            class="bg-slate-700/30 rounded-xl p-4 text-center hover:bg-slate-600/30 transition-all group">
+                            <i
+                                class="fa-solid fa-image text-2xl text-brand-400 group-hover:scale-110 transition-transform"></i>
+                            <p class="text-xs text-slate-400 mt-2">Photo Before</p>
+                            <p class="text-[10px] text-brand-400 mt-1">
+                                <i class="fa-solid fa-external-link mr-1"></i>Open in Drive
+                            </p>
+                        </a>
+                        <div v-else class="bg-slate-700/30 rounded-xl p-4 text-center opacity-50">
+                            <i class="fa-regular fa-image text-2xl text-slate-500"></i>
+                            <p class="text-xs text-slate-500 mt-2">No Photo</p>
+                        </div>
+
+                        <a v-if="selectedReturn.photoAfterUrl" :href="selectedReturn.photoAfterUrl" target="_blank"
+                            class="bg-slate-700/30 rounded-xl p-4 text-center hover:bg-slate-600/30 transition-all group">
+                            <i
+                                class="fa-solid fa-image text-2xl text-amber-400 group-hover:scale-110 transition-transform"></i>
+                            <p class="text-xs text-slate-400 mt-2">Photo After</p>
+                            <p class="text-[10px] text-amber-400 mt-1">
+                                <i class="fa-solid fa-external-link mr-1"></i>Open in Drive
+                            </p>
+                        </a>
+                        <div v-else class="bg-slate-700/30 rounded-xl p-4 text-center opacity-50">
+                            <i class="fa-regular fa-image text-2xl text-slate-500"></i>
+                            <p class="text-xs text-slate-500 mt-2">No Photo</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Close Button -->
+                <button @click="selectedReturn = null"
+                    class="w-full bg-slate-700 hover:bg-slate-600 py-3 rounded-xl font-bold text-sm transition-colors">
+                    Close
+                </button>
+            </div>
+        </div>
+
+        <!-- Loading Overlay -->
+        <div v-if="loading"
+            class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm">
+            <div class="text-center">
+                <i class="fa-solid fa-circle-notch fa-spin text-brand-500 text-4xl mb-4"></i>
+                <p class="text-slate-400">Loading data from Firebase...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, computed, onMounted, watch } = Vue;
+
+        createApp({
+            setup() {
+                const loading = ref(true);
+                const bookings = ref([]);
+                const returns = ref([]);
+                const lastUpdated = ref('-');
+                const currentDate = ref(new Date());
+                const statusFilter = ref('all');
+                const selectedDay = ref(null);
+
+                // Static car data for reference
+                const cars = [
+                    { id: 1, plate: 'ญช 908 กท', model: 'Cap', type: 'Fuel' },
+                    { id: 2, plate: 'ฎฮ 9043 กท', model: 'Optra', type: 'Fuel' },
+                    { id: 3, plate: '1ขท 3650 กท', model: 'Optra', type: 'Fuel' },
+                    { id: 4, plate: 'สท 4690 กท', model: 'Optra', type: 'Fuel' },
+                    { id: 5, plate: '3ขช 2404 กท', model: 'Optra', type: 'Fuel' },
+                    { id: 6, plate: '3ขช 3222 กท', model: 'Cap', type: 'Fuel' },
+                    { id: 7, plate: 'บ 3004 กท', model: 'MG4', type: 'EV' },
+                    { id: 8, plate: 'ฮ 2227 กท', model: 'MG4', type: 'EV' }
+                ];
+
+                const monthNames = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
+                    'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
+
+                const currentMonthName = computed(() => monthNames[currentDate.value.getMonth()]);
+                const currentYear = computed(() => currentDate.value.getFullYear());
+
+                // Stats
+                const stats = computed(() => {
+                    const total = bookings.value.length;
+                    const approved = bookings.value.filter(b => b.status === 'Approved').length;
+                    const returned = bookings.value.filter(b => b.status === 'Returned').length;
+                    const totalDist = returns.value.reduce((sum, r) => sum + (parseFloat(r.distance) || 0), 0);
+
+                    return {
+                        totalBookings: total,
+                        approved,
+                        returned,
+                        totalDistance: totalDist
+                    };
+                });
+
+                // Calendar Days
+                const calendarDays = computed(() => {
+                    const year = currentDate.value.getFullYear();
+                    const month = currentDate.value.getMonth();
+
+                    const firstDay = new Date(year, month, 1);
+                    const lastDay = new Date(year, month + 1, 0);
+                    const startDayOfWeek = firstDay.getDay();
+
+                    const days = [];
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+
+                    // Previous month days
+                    const prevMonthLastDay = new Date(year, month, 0).getDate();
+                    for (let i = startDayOfWeek - 1; i >= 0; i--) {
+                        days.push({
+                            day: prevMonthLastDay - i,
+                            isCurrentMonth: false,
+                            isToday: false,
+                            bookings: []
+                        });
+                    }
+
+                    // Current month days
+                    for (let d = 1; d <= lastDay.getDate(); d++) {
+                        const cellDate = new Date(year, month, d);
+                        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+
+                        // Find bookings that overlap with this day
+                        const dayBookings = bookings.value.filter(b => {
+                            const start = b.startDate || b.start;
+                            const end = b.endDate || b.end;
+                            if (!start || !end) return false;
+
+                            const bStart = new Date(start);
+                            const bEnd = new Date(end);
+                            bStart.setHours(0, 0, 0, 0);
+                            bEnd.setHours(23, 59, 59, 999);
+
+                            return cellDate >= bStart && cellDate <= bEnd;
+                        });
+
+                        days.push({
+                            day: d,
+                            isCurrentMonth: true,
+                            isToday: cellDate.getTime() === today.getTime(),
+                            bookings: dayBookings,
+                            date: dateStr
+                        });
+                    }
+
+                    // Next month days
+                    const remaining = 42 - days.length;
+                    for (let i = 1; i <= remaining; i++) {
+                        days.push({
+                            day: i,
+                            isCurrentMonth: false,
+                            isToday: false,
+                            bookings: []
+                        });
+                    }
+
+                    return days;
+                });
+
+                // Monthly Bookings
+                const monthlyBookings = computed(() => {
+                    const year = currentDate.value.getFullYear();
+                    const month = currentDate.value.getMonth();
+
+                    return bookings.value.filter(b => {
+                        const start = b.startDate || b.start;
+                        if (!start) return false;
+                        const d = new Date(start);
+                        return d.getFullYear() === year && d.getMonth() === month;
+                    }).sort((a, b) => new Date(a.startDate || a.start) - new Date(b.startDate || b.start));
+                });
+
+                const filteredBookings = computed(() => {
+                    if (statusFilter.value === 'all') return monthlyBookings.value;
+                    return monthlyBookings.value.filter(b => b.status === statusFilter.value);
+                });
+
+                // Monthly Returns
+                const monthlyReturns = computed(() => {
+                    const year = currentDate.value.getFullYear();
+                    const month = currentDate.value.getMonth();
+
+                    return returns.value.filter(r => {
+                        if (!r.returnedAt) return false;
+                        const d = new Date(r.returnedAt);
+                        return d.getFullYear() === year && d.getMonth() === month;
+                    });
+                });
+
+                // Car Availability (Today)
+                const carsWithAvailability = computed(() => {
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+
+                    return cars.map(car => {
+                        // Find active booking for this car today
+                        const activeBooking = bookings.value.find(b => {
+                            if (parseInt(b.carId) !== car.id) return false;
+                            if (b.status === 'Returned') return false;
+
+                            const start = b.startDate || b.start;
+                            const end = b.endDate || b.end;
+                            if (!start || !end) return false;
+
+                            const bStart = new Date(start);
+                            const bEnd = new Date(end);
+                            bStart.setHours(0, 0, 0, 0);
+                            bEnd.setHours(23, 59, 59, 999);
+
+                            return today >= bStart && today <= bEnd;
+                        });
+
+                        return {
+                            ...car,
+                            isAvailable: !activeBooking,
+                            bookedBy: activeBooking ? (activeBooking.userName || activeBooking.user) : null,
+                            bookedUntil: activeBooking ? (activeBooking.endDate || activeBooking.end) : null
+                        };
+                    });
+                });
+
+                const availableCarsCount = computed(() =>
+                    carsWithAvailability.value.filter(c => c.isAvailable).length
+                );
+
+                const bookedCarsCount = computed(() =>
+                    carsWithAvailability.value.filter(c => !c.isAvailable).length
+                );
+
+                // Methods
+                const prevMonth = () => {
+                    const d = new Date(currentDate.value);
+                    d.setMonth(d.getMonth() - 1);
+                    currentDate.value = d;
+                };
+
+                const nextMonth = () => {
+                    const d = new Date(currentDate.value);
+                    d.setMonth(d.getMonth() + 1);
+                    currentDate.value = d;
+                };
+
+                const formatDate = (dateStr) => {
+                    if (!dateStr) return '-';
+                    const d = new Date(dateStr);
+                    return `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
+                };
+
+                const showDayDetail = (cell) => {
+                    selectedDay.value = cell;
+                };
+
+                const selectedReturn = ref(null);
+
+                const showReturnDetail = (ret) => {
+                    selectedReturn.value = ret;
+                };
+
+                const formatDateTime = (dateStr) => {
+                    if (!dateStr) return '-';
+                    const d = new Date(dateStr);
+                    return `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()} ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+                };
+
+                // Setup realtime listeners (auto-refresh when data changes)
+                const setupRealtimeListeners = () => {
+                    if (!window.firebaseDB) {
+                        console.log('Waiting for Firebase...');
+                        setTimeout(setupRealtimeListeners, 500);
+                        return;
+                    }
+
+                    loading.value = true;
+
+                    // Realtime listener for Bookings
+                    const bookingsRef = window.firebaseRef(window.firebaseDB, 'bookings');
+                    window.firebaseOnValue(bookingsRef, (snapshot) => {
+                        if (snapshot.exists()) {
+                            const data = [];
+                            snapshot.forEach((child) => {
+                                data.push({ id: child.key, ...child.val() });
+                            });
+                            bookings.value = data;
+                            console.log('🔄 Bookings updated:', data.length);
+                        } else {
+                            bookings.value = [];
+                        }
+                        lastUpdated.value = new Date().toLocaleTimeString('th-TH');
+                        loading.value = false;
+                    }, (err) => {
+                        console.error('Bookings listener error:', err);
+                        loading.value = false;
+                    });
+
+                    // Realtime listener for Returns
+                    const returnsRef = window.firebaseRef(window.firebaseDB, 'returns');
+                    window.firebaseOnValue(returnsRef, (snapshot) => {
+                        if (snapshot.exists()) {
+                            const data = [];
+                            snapshot.forEach((child) => {
+                                data.push({ id: child.key, ...child.val() });
+                            });
+                            returns.value = data;
+                            console.log('🔄 Returns updated:', data.length);
+                        } else {
+                            returns.value = [];
+                        }
+                        lastUpdated.value = new Date().toLocaleTimeString('th-TH');
+                    }, (err) => {
+                        console.error('Returns listener error:', err);
+                    });
+                };
+
+                const refreshData = () => {
+                    // With realtime listeners, data is always fresh
+                    // This just updates the timestamp display
+                    lastUpdated.value = new Date().toLocaleTimeString('th-TH');
+                };
+
+                onMounted(() => {
+                    // Wait for Firebase to initialize then setup realtime listeners
+                    setTimeout(setupRealtimeListeners, 1000);
+                });
+
+                return {
+                    loading,
+                    bookings,
+                    returns,
+                    lastUpdated,
+                    currentDate,
+                    currentMonthName,
+                    currentYear,
+                    stats,
+                    calendarDays,
+                    filteredBookings,
+                    monthlyReturns,
+                    statusFilter,
+                    selectedDay,
+                    prevMonth,
+                    nextMonth,
+                    formatDate,
+                    showDayDetail,
+                    refreshData,
+                    selectedReturn,
+                    showReturnDetail,
+                    formatDateTime,
+                    carsWithAvailability,
+                    availableCarsCount,
+                    bookedCarsCount
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+
+</html>
