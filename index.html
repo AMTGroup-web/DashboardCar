@@ -23,7 +23,7 @@
     <!-- Firebase SDK -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-app.js";
-        import { getDatabase, ref, onValue, get } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-database.js";
+        import { getDatabase, ref, onValue, get, push, set, update, remove } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-database.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyDKnLLu2TxskF1oVoJOYwrd4MtXW26VsBc",
@@ -44,6 +44,10 @@
         window.firebaseRef = ref;
         window.firebaseOnValue = onValue;
         window.firebaseGet = get;
+        window.firebasePush = push;
+        window.firebaseSet = set;
+        window.firebaseUpdate = update;
+        window.firebaseRemove = remove;
     </script>
 
     <script>
@@ -473,7 +477,185 @@
                     </div>
                 </div>
             </section>
+
+            <!-- Car Management Section -->
+            <section class="glass-card rounded-3xl p-6">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                    <h2 class="font-heading text-xl font-bold flex items-center gap-2">
+                        <i class="fa-solid fa-car-garage text-purple-500"></i>
+                        จัดการข้อมูลรถ
+                    </h2>
+                    <button @click="openCarModal(null)"
+                        class="bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2">
+                        <i class="fa-solid fa-plus"></i>
+                        เพิ่มรถใหม่
+                    </button>
+                </div>
+
+                <!-- Cars Table -->
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead>
+                            <tr class="border-b border-slate-700">
+                                <th
+                                    class="text-left text-xs font-bold text-slate-400 uppercase tracking-wider py-3 px-4">
+                                    ID</th>
+                                <th
+                                    class="text-left text-xs font-bold text-slate-400 uppercase tracking-wider py-3 px-4">
+                                    ทะเบียน</th>
+                                <th
+                                    class="text-left text-xs font-bold text-slate-400 uppercase tracking-wider py-3 px-4">
+                                    รุ่น</th>
+                                <th
+                                    class="text-left text-xs font-bold text-slate-400 uppercase tracking-wider py-3 px-4">
+                                    สี</th>
+                                <th
+                                    class="text-left text-xs font-bold text-slate-400 uppercase tracking-wider py-3 px-4">
+                                    ประเภท</th>
+                                <th
+                                    class="text-left text-xs font-bold text-slate-400 uppercase tracking-wider py-3 px-4">
+                                    สถานะ</th>
+                                <th
+                                    class="text-center text-xs font-bold text-slate-400 uppercase tracking-wider py-3 px-4">
+                                    จัดการ</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="car in carsFromFirebase" :key="car.firebaseKey"
+                                class="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors">
+                                <td class="py-3 px-4 font-mono text-sm">{{ car.id }}</td>
+                                <td class="py-3 px-4 font-bold">{{ car.plate }}</td>
+                                <td class="py-3 px-4">{{ car.model }}</td>
+                                <td class="py-3 px-4">{{ car.color || '-' }}</td>
+                                <td class="py-3 px-4">
+                                    <span :class="[
+                                        'px-2 py-1 rounded text-xs font-bold',
+                                        car.type === 'EV' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-500/20 text-slate-400'
+                                    ]">
+                                        <i
+                                            :class="car.type === 'EV' ? 'fa-solid fa-bolt mr-1' : 'fa-solid fa-gas-pump mr-1'"></i>
+                                        {{ car.type }}
+                                    </span>
+                                </td>
+                                <td class="py-3 px-4">
+                                    <span :class="[
+                                        'px-2 py-1 rounded text-xs font-bold',
+                                        car.active !== false ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
+                                    ]">
+                                        {{ car.active !== false ? 'Active' : 'Inactive' }}
+                                    </span>
+                                </td>
+                                <td class="py-3 px-4 text-center">
+                                    <button @click="openCarModal(car)"
+                                        class="bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded text-xs mr-2">
+                                        <i class="fa-solid fa-pen"></i>
+                                    </button>
+                                    <button @click="deleteCar(car)"
+                                        class="bg-red-600 hover:bg-red-700 px-3 py-1 rounded text-xs">
+                                        <i class="fa-solid fa-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            <tr v-if="carsFromFirebase.length === 0">
+                                <td colspan="7" class="text-center py-10 text-slate-500">
+                                    <i class="fa-solid fa-car text-4xl mb-3 block"></i>
+                                    ยังไม่มีข้อมูลรถ
+                                    <button @click="seedInitialCars"
+                                        class="block mx-auto mt-3 bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded-xl text-sm">
+                                        เพิ่มรถเริ่มต้น 8 คัน
+                                    </button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
         </main>
+
+        <!-- Car Add/Edit Modal -->
+        <div v-if="showCarModal"
+            class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm p-6"
+            @click.self="showCarModal = false">
+            <div class="bg-slate-800 rounded-3xl shadow-2xl p-6 w-full max-w-md border border-slate-700">
+                <div class="flex items-center justify-between mb-6">
+                    <h3 class="font-heading font-bold text-xl flex items-center gap-2">
+                        <i
+                            :class="editingCar ? 'fa-solid fa-pen text-blue-500' : 'fa-solid fa-plus text-purple-500'"></i>
+                        {{ editingCar ? 'แก้ไขข้อมูลรถ' : 'เพิ่มรถใหม่' }}
+                    </h3>
+                    <button @click="showCarModal = false"
+                        class="w-8 h-8 rounded-full bg-slate-700 hover:bg-slate-600 flex items-center justify-center">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+
+                <form @submit.prevent="saveCar" class="space-y-4">
+                    <div>
+                        <label class="text-xs text-slate-400 block mb-1">ID (ลำดับ)</label>
+                        <input type="number" v-model.number="carForm.id" required
+                            class="w-full bg-slate-700 border border-slate-600 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-purple-500">
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-400 block mb-1">ทะเบียน</label>
+                        <input type="text" v-model="carForm.plate" required placeholder="เช่น ญช 908 กท"
+                            class="w-full bg-slate-700 border border-slate-600 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-purple-500">
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-400 block mb-1">รุ่นรถ</label>
+                        <input type="text" v-model="carForm.model" required placeholder="เช่น MG4, Optra, Cap"
+                            class="w-full bg-slate-700 border border-slate-600 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-purple-500">
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-400 block mb-1">สี</label>
+                        <input type="text" v-model="carForm.color" placeholder="เช่น สีขาว, สีเทา"
+                            class="w-full bg-slate-700 border border-slate-600 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-purple-500">
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-400 block mb-1">ประเภทเชื้อเพลิง</label>
+                        <div class="grid grid-cols-2 gap-3">
+                            <label :class="[
+                                'flex items-center justify-center gap-2 p-3 rounded-xl cursor-pointer border-2 transition-all',
+                                carForm.type === 'Fuel' ? 'border-amber-500 bg-amber-500/20' : 'border-slate-600 bg-slate-700'
+                            ]">
+                                <input type="radio" v-model="carForm.type" value="Fuel" class="hidden">
+                                <i class="fa-solid fa-gas-pump text-amber-400"></i>
+                                <span>น้ำมัน (Fuel)</span>
+                            </label>
+                            <label :class="[
+                                'flex items-center justify-center gap-2 p-3 rounded-xl cursor-pointer border-2 transition-all',
+                                carForm.type === 'EV' ? 'border-emerald-500 bg-emerald-500/20' : 'border-slate-600 bg-slate-700'
+                            ]">
+                                <input type="radio" v-model="carForm.type" value="EV" class="hidden">
+                                <i class="fa-solid fa-bolt text-emerald-400"></i>
+                                <span>ไฟฟ้า (EV)</span>
+                            </label>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-400 block mb-1">สถานะ</label>
+                        <div class="flex items-center gap-4">
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" v-model="carForm.active"
+                                    class="w-5 h-5 rounded border-slate-600 bg-slate-700 text-purple-600 focus:ring-purple-500">
+                                <span>Active (ใช้งานได้)</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="flex gap-3 pt-4">
+                        <button type="button" @click="showCarModal = false"
+                            class="flex-1 bg-slate-700 hover:bg-slate-600 py-3 rounded-xl font-bold transition-colors">
+                            ยกเลิก
+                        </button>
+                        <button type="submit"
+                            class="flex-1 bg-purple-600 hover:bg-purple-700 py-3 rounded-xl font-bold transition-colors">
+                            <i class="fa-solid fa-save mr-2"></i>
+                            {{ editingCar ? 'บันทึก' : 'เพิ่มรถ' }}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
 
         <!-- Day Detail Modal -->
         <div v-if="selectedDay"
@@ -651,17 +833,6 @@
                 const statusFilter = ref('all');
                 const selectedDay = ref(null);
 
-                // Static car data for reference
-                const cars = [
-                    { id: 1, plate: 'ญช 908 กท', model: 'Cap', type: 'Fuel' },
-                    { id: 2, plate: 'ฎฮ 9043 กท', model: 'Optra', type: 'Fuel' },
-                    { id: 3, plate: '1ขท 3650 กท', model: 'Optra', type: 'Fuel' },
-                    { id: 4, plate: 'สท 4690 กท', model: 'Optra', type: 'Fuel' },
-                    { id: 5, plate: '3ขช 2404 กท', model: 'Optra', type: 'Fuel' },
-                    { id: 6, plate: '3ขช 3222 กท', model: 'Cap', type: 'Fuel' },
-                    { id: 7, plate: 'บ 3004 กท', model: 'MG4', type: 'EV' },
-                    { id: 8, plate: 'ฮ 2227 กท', model: 'MG4', type: 'EV' }
-                ];
 
                 const monthNames = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
                     'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
@@ -780,12 +951,12 @@
                     });
                 });
 
-                // Car Availability (Today)
+                // Car Availability (Today) - Uses dynamic cars from Firebase
                 const carsWithAvailability = computed(() => {
                     const today = new Date();
                     today.setHours(0, 0, 0, 0);
 
-                    return cars.map(car => {
+                    return carsFromFirebase.value.map(car => {
                         // Find active booking for this car today
                         const activeBooking = bookings.value.find(b => {
                             if (parseInt(b.carId) !== car.id) return false;
@@ -855,6 +1026,126 @@
                     return `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()} ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
                 };
 
+
+                const refreshData = () => {
+                    // With realtime listeners, data is always fresh
+                    // This just updates the timestamp display
+                    lastUpdated.value = new Date().toLocaleTimeString('th-TH');
+                };
+
+                // ========================================
+                // CAR MANAGEMENT
+                // ========================================
+                const carsFromFirebase = ref([]);
+                const showCarModal = ref(false);
+                const editingCar = ref(null);
+                const carForm = ref({
+                    id: 1,
+                    plate: '',
+                    model: '',
+                    color: '',
+                    type: 'Fuel',
+                    active: true
+                });
+
+                const openCarModal = (car) => {
+                    if (car) {
+                        // Edit mode
+                        editingCar.value = car;
+                        carForm.value = {
+                            id: car.id,
+                            plate: car.plate,
+                            model: car.model,
+                            color: car.color || '',
+                            type: car.type || 'Fuel',
+                            active: car.active !== false
+                        };
+                    } else {
+                        // Add new mode
+                        editingCar.value = null;
+                        const maxId = carsFromFirebase.value.reduce((max, c) => Math.max(max, c.id || 0), 0);
+                        carForm.value = {
+                            id: maxId + 1,
+                            plate: '',
+                            model: '',
+                            color: '',
+                            type: 'Fuel',
+                            active: true
+                        };
+                    }
+                    showCarModal.value = true;
+                };
+
+                const saveCar = async () => {
+                    try {
+                        const carData = {
+                            id: carForm.value.id,
+                            plate: carForm.value.plate,
+                            model: carForm.value.model,
+                            color: carForm.value.color,
+                            type: carForm.value.type,
+                            active: carForm.value.active,
+                            updatedAt: new Date().toISOString()
+                        };
+
+                        if (editingCar.value && editingCar.value.firebaseKey) {
+                            // Update existing
+                            const carRef = window.firebaseRef(window.firebaseDB, `cars/${editingCar.value.firebaseKey}`);
+                            await window.firebaseUpdate(carRef, carData);
+                            console.log('✅ Car updated:', carData.plate);
+                        } else {
+                            // Add new
+                            carData.createdAt = new Date().toISOString();
+                            const carsRef = window.firebaseRef(window.firebaseDB, 'cars');
+                            await window.firebasePush(carsRef, carData);
+                            console.log('✅ Car added:', carData.plate);
+                        }
+
+                        showCarModal.value = false;
+                    } catch (error) {
+                        console.error('❌ Save car error:', error);
+                        alert('เกิดข้อผิดพลาด: ' + error.message);
+                    }
+                };
+
+                const deleteCar = async (car) => {
+                    if (!confirm(`ต้องการลบรถ ${car.plate} - ${car.model} หรือไม่?`)) return;
+
+                    try {
+                        const carRef = window.firebaseRef(window.firebaseDB, `cars/${car.firebaseKey}`);
+                        await window.firebaseRemove(carRef);
+                        console.log('🗑️ Car deleted:', car.plate);
+                    } catch (error) {
+                        console.error('❌ Delete car error:', error);
+                        alert('เกิดข้อผิดพลาด: ' + error.message);
+                    }
+                };
+
+                const seedInitialCars = async () => {
+                    const initialCars = [
+                        { id: 1, plate: 'ญช 908 กท', model: 'Cap', color: 'สีขาว', type: 'Fuel', active: true },
+                        { id: 2, plate: 'ฎฮ 9043 กท', model: 'Optra', color: 'สีเทา', type: 'Fuel', active: true },
+                        { id: 3, plate: '1ขท 3650 กท', model: 'Optra', color: 'สีเทา', type: 'Fuel', active: true },
+                        { id: 4, plate: 'สท 4690 กท', model: 'Optra', color: 'สีเทา', type: 'Fuel', active: true },
+                        { id: 5, plate: '3ขช 2404 กท', model: 'Optra', color: 'สีเงิน', type: 'Fuel', active: true },
+                        { id: 6, plate: '3ขช 3222 กท', model: 'Cap', color: 'สีน้ำตาล', type: 'Fuel', active: true },
+                        { id: 7, plate: 'บ 3004 กท', model: 'MG4', color: 'สีขาว', type: 'EV', active: true },
+                        { id: 8, plate: 'ฮ 2227 กท', model: 'MG4', color: 'สีเทา', type: 'EV', active: true }
+                    ];
+
+                    try {
+                        const carsRef = window.firebaseRef(window.firebaseDB, 'cars');
+                        for (const car of initialCars) {
+                            car.createdAt = new Date().toISOString();
+                            await window.firebasePush(carsRef, car);
+                        }
+                        console.log('✅ Seeded 8 initial cars');
+                    } catch (error) {
+                        console.error('❌ Seed error:', error);
+                        alert('เกิดข้อผิดพลาด: ' + error.message);
+                    }
+                };
+
                 // Setup realtime listeners (auto-refresh when data changes)
                 const setupRealtimeListeners = () => {
                     if (!window.firebaseDB) {
@@ -865,13 +1156,34 @@
 
                     loading.value = true;
 
+                    // Realtime listener for Cars
+                    const carsRef = window.firebaseRef(window.firebaseDB, 'cars');
+                    window.firebaseOnValue(carsRef, (snapshot) => {
+                        if (snapshot.exists()) {
+                            const data = [];
+                            snapshot.forEach((child) => {
+                                if (child.key !== '_placeholder') {
+                                    data.push({ firebaseKey: child.key, ...child.val() });
+                                }
+                            });
+                            // Sort by ID
+                            data.sort((a, b) => (a.id || 0) - (b.id || 0));
+                            carsFromFirebase.value = data;
+                            console.log('🚗 Cars updated:', data.length);
+                        } else {
+                            carsFromFirebase.value = [];
+                        }
+                    });
+
                     // Realtime listener for Bookings
                     const bookingsRef = window.firebaseRef(window.firebaseDB, 'bookings');
                     window.firebaseOnValue(bookingsRef, (snapshot) => {
                         if (snapshot.exists()) {
                             const data = [];
                             snapshot.forEach((child) => {
-                                data.push({ id: child.key, ...child.val() });
+                                if (child.key !== '_placeholder') {
+                                    data.push({ id: child.key, ...child.val() });
+                                }
                             });
                             bookings.value = data;
                             console.log('🔄 Bookings updated:', data.length);
@@ -891,7 +1203,9 @@
                         if (snapshot.exists()) {
                             const data = [];
                             snapshot.forEach((child) => {
-                                data.push({ id: child.key, ...child.val() });
+                                if (child.key !== '_placeholder') {
+                                    data.push({ id: child.key, ...child.val() });
+                                }
                             });
                             returns.value = data;
                             console.log('🔄 Returns updated:', data.length);
@@ -902,12 +1216,6 @@
                     }, (err) => {
                         console.error('Returns listener error:', err);
                     });
-                };
-
-                const refreshData = () => {
-                    // With realtime listeners, data is always fresh
-                    // This just updates the timestamp display
-                    lastUpdated.value = new Date().toLocaleTimeString('th-TH');
                 };
 
                 onMounted(() => {
@@ -939,7 +1247,16 @@
                     formatDateTime,
                     carsWithAvailability,
                     availableCarsCount,
-                    bookedCarsCount
+                    bookedCarsCount,
+                    // Car Management
+                    carsFromFirebase,
+                    showCarModal,
+                    editingCar,
+                    carForm,
+                    openCarModal,
+                    saveCar,
+                    deleteCar,
+                    seedInitialCars
                 };
             }
         }).mount('#app');
